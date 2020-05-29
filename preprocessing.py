@@ -23,24 +23,51 @@ import torch
 import itertools
 from sklearn.preprocessing import StandardScaler, scale
 import matplotlib.pyplot as plt
+from scipy.signal import decimate
 np.random.seed(0)
 torch.manual_seed(0)
 
-def get_data_paths(type="Intra", train_test="train"):
-    assert type in ["Intra", "Cross"], "Not sure if Intra or Cross"
-    dataset_names = os.listdir(f"Data/{type}/{train_test}")
-    path_names = [os.path.join("Data", type, train_test, i) for i in dataset_names]
-    return path_names
+# def get_data_paths(type_name="Intra", train_test="train"):
+#     assert type in ["Intra", "Cross"], "Not sure if Intra or Cross"
+#     dataset_names = os.listdir(f"Data/{type_name}/{train_test}")
+#     path_names = [os.path.join("Data", type_name, train_test, i) for i in dataset_names]
+#     return path_names
 
-def load_data(path):
-    # TODO allow loading of multiple data sets
-    filename_without_dir = path.split('/')[-1]
-    temp = filename_without_dir.split('_')[:-1]
-    dataset_name = "_".join(temp)
-    with h5py.File(path,'r') as f:
-        matrix = f.get(dataset_name)[()]
-    return matrix
+# def load_data(path):
+#     # TODO allow loading of multiple data sets
+#     filename_without_dir = path.split('/')[-1]
+#     temp = filename_without_dir.split('_')[:-1]
+#     dataset_name = "_".join(temp)
+#     with h5py.File(path,'r') as f:
+#         matrix = f.get(dataset_name)[()]
+#     return matrix
 
+def load_data(type_name, train_test, downsampling):
+    """ yield training data on a per-task level """
+    directory = f"Data/{type_name}/{train_test}/"
+    dataset_names = os.listdir(f"Data/{type_name}/{train_test}")
+
+    # identify all subjects and tasks
+    all_subjects = []
+    subjects = np.unique([i.split("_")[-2] for i in dataset_names])
+    tasks = np.unique(["_".join(i.split("/")[-1].split("_")[:-2])for i in dataset_names])
+
+    for subject in subjects:
+        # sorder all subjects and tasks alphabetically to maintain the order
+        subject_files = sorted([i for i in dataset_names if subject in i])
+        for task in tasks:
+            current_task_matrix = None
+            task_files = [i for i in subject_files if task in i]
+            for file_name in task_files:
+                full_name = directory + file_name
+                with h5py.File(full_name, "r") as f:
+                    matrix = f.get("_".join(file_name.split('_')[:-1]))[()]
+                if current_task_matrix is None:
+                    current_task_matrix = matrix
+                else:
+                    current_task_matrix = np.hstack((current_task_matrix, matrix))
+            current_task_matrix = decimate(current_task_matrix, q=downsampling)
+            yield (subject, task, current_task_matrix)
 
 def create_windows(data, window_size, keep_fraction):
     """ 
@@ -54,37 +81,47 @@ def create_windows(data, window_size, keep_fraction):
             windows.append(data[:, i:i+window_size])
     return windows
 
-def create_labels(train_data, path):
+def create_labels(train_data, label_name):
     """ 
     Extract labels from path, arange in form of train_data
     """
     label_dict = {
         "rest": 0,
         "task_motor": 1,
-        "task_story": 2,
-        "task_story_math": 3,
-        "task_working_memory": 4
+        "task_story_math": 2,
+        "task_working_memory": 3
     }
-    label = label_dict["_".join(path.split("/")[-1].split("_")[:-2])]
+    if len(label_dict) == 0:
+        label = 0
+        label_dict[label_name] = label
+    elif label_name not in label_dict.keys():
+        label = max(label_dict.values()) + 1
+        label_dict[label_name] = label
+    else:
+        label = label_dict[label_name]
     labels = [label] * len(train_data)
-    return labels
+    return labels, label_dict
 
 def scale_obs(obs):
     return [scale(i, axis=1) for i in obs]
 
-def preprocess(exp_type="Intra", train_test="train", keep_fraction=0.0002, scale_observations=True):
-    # create x of shape (n_batch, n_channel, n_obs)
-    dataset_names = get_data_paths(exp_type, train_test)
-    datasets = [load_data(i) for i in dataset_names]
+# TODO create cross-validation set alongside
+# TODO add in some nice prints about how exactly we are pre-processing data
+def preprocess(datasets:list, label_list:list, window_size, downsampling, keep_fraction, scale_observations):
+    """ 
+    @param datasets: list of datasets to perform windowing on
+    @param label_list: a list of labels for each dataset
+    @param window_size: number of observations per window
+    @param keep_fraction: fraction of windows to keep
+    @param scale_observations: whether or not to normalize each window
+    """
 
     all_windows = []
     all_labels = []
-    for i in range(len(datasets[:])):
-        data_path = dataset_names[i]
-        data = datasets[i]
-        window = create_windows(data, 1000, keep_fraction=keep_fraction)
+    for i, data in enumerate(datasets):
+        window = create_windows(data, window_size, keep_fraction=keep_fraction)
         all_windows.append(window)
-        labels = create_labels(window, data_path)
+        labels, label_dict = create_labels(window, label_list[i])
         all_labels.append(labels)
     
     # flatten nested lists
@@ -105,7 +142,7 @@ def preprocess(exp_type="Intra", train_test="train", keep_fraction=0.0002, scale
     x_tens = torch.FloatTensor(window_list)
     y_tens = torch.IntTensor(label_list)
 
-    return x_tens, y_tens
+    return x_tens, y_tens, label_dict
 
 def plot_some_obs(x_tens):
     data = x_tens[0]
@@ -117,6 +154,10 @@ def plot_some_obs(x_tens):
 
 
 if __name__ == "__main__":
-    dataset_names = get_data_paths(type="Intra", train_test="train")
-    datasets = [load_data(i) for i in dataset_names]
-    windows = create_windows(data, 1000)
+
+    all_subjects = load_data(type_name="Intra", train_test="train")
+    datasets = [all_subjects["105923"]["rest"], all_subjects["105923"]["task_motor"]]
+    label_list = ["rest", "task_motor"]
+
+    x_tens, y_tens = preprocess(datasets, label_list, window_size=1000, keep_fraction=0.001, scale_observations=True)
+

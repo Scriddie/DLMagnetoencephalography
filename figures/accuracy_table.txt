@@ -1,0 +1,7 @@
+\begin{tabular}{r}
+\toprule
+ accuracy \\
+\midrule
+ 0.316532 \\
+\bottomrule
+\end{tabular}

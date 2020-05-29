@@ -1,6 +1,7 @@
 # USER DEFINED
 dl_env/
 Data/
+models/
 
 
 # Byte-compiled / optimized / DLL files
