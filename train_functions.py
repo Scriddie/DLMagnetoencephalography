@@ -56,7 +56,7 @@ def evaluate_sample(model, cv_loader, label_dict, title, model_path, intra_cross
         preds = None
         y = None
         for n_batches, (x_batch, y_batch) in enumerate(cv_loader):
-            batch_preds = torch.log_softmax(model(x_batch), dim = 1)
+            batch_preds = torch.log_softmax(model(x_batch, dropout=False), dim = 1)
             _, batch_preds = torch.max(batch_preds, dim = 1)
             if preds is None:
                 preds = batch_preds.detach().numpy()
@@ -83,7 +83,7 @@ def evaluate_sample(model, cv_loader, label_dict, title, model_path, intra_cross
     names = list(label_dict)
     df = pd.DataFrame(np.round(cm, 4), index=names, columns=names)
     plt.close("all")
-    sns.heatmap(df, annot=True, fmt='g')
+    sns.heatmap(df, annot=True, fmt='g', cmap="coolwarm")
     plt.title(f"{title} - ConfusionMatrix")
     plt.tight_layout()
     plt.savefig(f"{model_path}/{intra_cross}_{title} - ConfusionMatrix.png", dpi=500)
