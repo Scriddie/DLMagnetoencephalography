@@ -39,15 +39,15 @@ def train_model(model, train_loader, cv_loader, n_epochs, max_batches, model_par
         for n_batch, (x_batch, y_batch) in enumerate(train_loader):
             if n_batch > max_batches:
                 break
-            if y_batch.size(0) == 1:
-                continue
+            # if y_batch.size(0) == 1:
+            #     continue
             x_batch = x_batch.to(device)
             y_batch = y_batch.to(device)
             model_params["optimizer"].zero_grad()
             output = model.forward(x_batch)
-            train_acc += multi_acc(output, y_batch)
+            train_acc += multi_acc(output, y_batch) * x_batch.size(0)
             loss = model_params["loss_fn"](output, y_batch.long())
-            total_train_loss += loss.item() / x_batch.size(0)
+            total_train_loss += loss.item()
             loss.backward()
             model_params["optimizer"].step()
 
@@ -57,13 +57,13 @@ def train_model(model, train_loader, cv_loader, n_epochs, max_batches, model_par
                 y_batch_cv = y_batch_cv.to(device)
                 cv_preds = model(x_batch_cv)
                 cv_loss = model_params["loss_fn"](cv_preds, y_batch_cv.long())
-                total_cv_loss += cv_loss.item() / x_batch.size(0)
-                cv_acc += multi_acc(cv_preds, y_batch_cv)
+                total_cv_loss += cv_loss.item()
+                cv_acc += multi_acc(cv_preds, y_batch_cv) * x_batch_cv.size(0)
                 
         train_losses.append(total_train_loss)
         cv_losses.append(total_cv_loss)
-        epoch_train_acc = train_acc / n_batch
-        epoch_cv_acc = cv_acc / n_batch
+        epoch_train_acc = train_acc / model_params["n_samples"]
+        epoch_cv_acc = cv_acc / model_params["n_samples"]
         print(f"\tEpoch: {epoch}\tTrain loss: {total_train_loss:.3f}; {epoch_train_acc*100:.2f}%  |  CV loss: {total_cv_loss:.3f}; {epoch_cv_acc*100:.2f}%")
         if cv_losses[-1] < best_cv_loss:
             best_cv_loss = cv_losses[-1]
@@ -122,26 +122,35 @@ def conv_grid_search(odel_df, test_loaders):
 
 def evaluate(model, model_path, test_loaders, visualize=False):
     all_accs = pd.DataFrame()
-    for i in range(1, 4):
+    for i in range(1, 1+len(test_dirs)):
         acc_df = evaluate_sample(model, test_loaders[i-1], test_label_dict, model_path=model_path,
-             title=f"Cross Subject - test{i}", intra_cross="cross", visualize=visualize)
+             title=f"{type_name} Subject - test{i}", intra_cross=type_name, visualize=visualize)
         acc_df["subject"] = [f"test{i}"]
         all_accs = pd.concat((all_accs, acc_df), axis=0)
     all_accs.to_latex(open(f"{model_path}/accuracy_table.txt", "w"), index=False)
 
 
+def train_intra():
+    pass
+
+
 if __name__ == "__main__":
 
-    model_path = "models/cross_" + datetime.now().strftime("%Y-%m-%d_%H:%M")[0:16]
+    # Define training
+    type_name = "Intra"
+    load_intra_cv = False
+    test_dirs = ["test"]
+    model_path = f"models/{type_name}_" + datetime.now().strftime("%Y-%m-%d_%H:%M")[0:16]
     os.mkdir(model_path)
+    
 
     ### load data
     preprocessing_params = {
         "downsampling": 10, 
         "window_size": 1000, 
-        "keep_fraction": 0.01, 
+        "keep_fraction": 0.015, 
         "scale_observations": True}
-    all_tasks = pp.load_data(type_name="Cross", train_test="train", downsampling=preprocessing_params["downsampling"])
+    all_tasks = pp.load_data(type_name=type_name, train_test="train", downsampling=preprocessing_params["downsampling"])
     x_tens, y_tens, label_dict = pp.preprocess(all_tasks, **preprocessing_params)
 
     preparation_params = {
@@ -149,19 +158,20 @@ if __name__ == "__main__":
         "batch_size": 16,
         "n_classes": 4,
         "model_type": "cnn"}
-    train_loader, within_cv_loader = prepare_data(x_tens, y_tens, **preparation_params)
-    cv_tasks = pp.load_data(type_name="Cross", train_test="CV", downsampling=preprocessing_params["downsampling"])
-    cv_x_tens, cv_y_tens, cv_label_dict = pp.preprocess(cv_tasks, **preprocessing_params)
-    cv_preparation_params = {
-        "train_fraction": 0,
-        "batch_size": 16,
-        "n_classes": 4,
-        "model_type": "cnn"}
-    _, cv_loader = prepare_data(cv_x_tens, cv_y_tens, **cv_preparation_params)
+    train_loader, cv_loader = prepare_data(x_tens, y_tens, **preparation_params)
+    if load_intra_cv:
+        cv_tasks = pp.load_data(type_name=type_name, train_test="CV", downsampling=preprocessing_params["downsampling"])
+        cv_x_tens, cv_y_tens, cv_label_dict = pp.preprocess(cv_tasks, **preprocessing_params)
+        cv_preparation_params = {
+            "train_fraction": 0,
+            "batch_size": 16,
+            "n_classes": 4,
+            "model_type": "cnn"}
+        _, cv_loader = prepare_data(cv_x_tens, cv_y_tens, **cv_preparation_params)
 
     test_loaders = []
-    for i in range(1, 4):
-        test_subjects = pp.load_data(type_name="Cross", train_test=f"test1", downsampling=preprocessing_params["downsampling"])
+    for test_dir in test_dirs:
+        test_subjects = pp.load_data(type_name=type_name, train_test=test_dir, downsampling=preprocessing_params["downsampling"])
         x_test, y_test, test_label_dict = pp.preprocess(test_subjects, **preprocessing_params)
         tl, _ = prepare_data(x_test, y_test, **preparation_params)
         test_loaders.append(tl)
@@ -170,21 +180,24 @@ if __name__ == "__main__":
     # cnn = models.CNN(input_dim=248, output_dim=4)
     reload(experimental_models)
     reload(models)
-    # cnn = experimental_models.CNNDropout(input_dim=248, output_dim=4)
-    # cnn = models.CNN(input_dim=248, output_dim=4)
+    cnn = models.CNN(input_dim=248, output_dim=4)
+    # cnn = experimental_models.CNNDropout(input_dim=248, output_dim=4,
+    #     droput_visible=0.2, dropout_hidden=0.2)
     # cnn = experimental_models.CNN2D(248, 4)
-    cnn = experimental_models.CNNSideways(248, 4)
+    # cnn = experimental_models.CNNSideways(248, 4)
+    # cnn = experimental_models.CNNBatchNorm(248, 4)
     cnn.to(device)
     
     datetime.now().strftime("%Y-%m-%d_%H:%s")[0:16]
     model_params = {
+        "n_samples": x_tens.size(0),
         "loss_fn": torch.nn.CrossEntropyLoss(),
-        "optimizer": torch.optim.Adam(cnn.parameters(), lr=5e-5),
+        "optimizer": torch.optim.Adam(cnn.parameters(), lr=1e-4),
         "early_stopping": 5,
         "model_name": "cross_CNN"
     }
 
-    train_model(cnn, train_loader, cv_loader, n_epochs=100, max_batches=np.inf, model_params=model_params, 
+    train_model(cnn, train_loader, cv_loader, n_epochs=5, max_batches=np.inf, model_params=model_params, 
         preprocessing_params=preprocessing_params, model_path=model_path, visualize=True)
 
     ### evalute

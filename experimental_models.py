@@ -23,12 +23,12 @@ device = torch.device("cpu")
 class CNNSideways(nn.Module):
     def __init__(self, input_dim, output_dim):
         super().__init__()
-        self.dropout0 = nn.Dropout(0.5)
+        self.dropout0 = nn.Dropout(0.6)
         self.cnn1 = nn.Conv1d(input_dim, 25, kernel_size=5, stride=2)
         self.dropout1 = nn.Dropout(0.5)
         self.cnn2 = nn.Conv1d(498, 10, kernel_size=5, stride=2)
         self.dropout2 = nn.Dropout(0.6)
-        self.fc1 = nn.Linear(275, output_dim)
+        self.fc1 = nn.Linear(110, output_dim)
         # self.sigmoid = nn.Sigmoid()
         # self.softmax = nn.Softmax(dim=-1)
 
@@ -42,7 +42,7 @@ class CNNSideways(nn.Module):
         output = F.relu(self.cnn2(output))
         output = torch.flatten(output, 1)
         output = self.dropout2(output)
-
+        # print(output.shape)
         output = self.fc1(output)
         # output = self.sigmoid(output)
         # output = self.softmax(output)
@@ -52,7 +52,7 @@ class CNNSideways(nn.Module):
 # Conv1dCNN with Batchnorm
 class CNNDropout(nn.Module):
     def __init__(self, input_dim, output_dim, 
-        droput_visible=0.8, dropout_hidden=0.5, kernel_size=5, stride=2):
+        droput_visible=0.5, dropout_hidden=0.5, kernel_size=5, stride=2):
         super().__init__()
         # TODO experiment with dropout2d?
         self.dropout1 = nn.Dropout(droput_visible)
@@ -88,16 +88,23 @@ class CNNBatchNorm(nn.Module):
         # TODO check for output dimensions
         # experiment with dropout2d?
         self.cnn1 = nn.Conv1d(input_dim, 25, kernel_size=5, stride=2)
+        self.bn1 = nn.BatchNorm1d(25)
         self.cnn2 = nn.Conv1d(25, 1, kernel_size=5, stride=2)
-        # TODO conv1d here???
+        self.bn2 = nn.BatchNorm1d(247)
         self.fc1 = nn.Linear(247, output_dim)
         # self.fc2 = nn.Linear(50, output_dim)
         # self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, x):
-        output = F.relu(F.batch_norm(self.cnn1(x)))
-        output = F.relu(F.batch_norm(self.cnn2(output)))
+        output = self.cnn1(x)
+        output = self.bn1(output)
+        output = F.relu(output)
+        # print(output.shape)
+        output = self.cnn2(output)
         output = torch.squeeze(output)
+        output = self.bn2(output)
+        output = F.relu(output)
+
         output = self.fc1(output)
         # output = self.softmax(output)
         return(output)

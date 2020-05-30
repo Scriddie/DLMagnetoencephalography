@@ -104,7 +104,7 @@ def create_labels(train_data, label_name):
     return labels, label_dict
 
 def scale_obs(obs):
-    return [scale(i, axis=1) for i in obs]
+    return [scale(i) for i in obs]
 
 # TODO create cross-validation set alongside
 # TODO add in some nice prints about how exactly we are pre-processing data

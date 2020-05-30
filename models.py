@@ -29,17 +29,19 @@ class ANN(nn.Module):
 class CNN(nn.Module):
     def __init__(self, input_dim, output_dim):
         super().__init__()
-        self.dropout0 = nn.Dropout(0.2)
-        self.cnn1 = nn.Conv1d(input_dim, 1, kernel_size=5, stride=2)
+        # self.dropout0 = nn.Dropout(0.2)
+        self.cnn1 = nn.Conv1d(input_dim, 16, kernel_size=5, stride=2)
         # self.dropout1 = nn.Dropout(0.5)
-        self.fc1 = nn.Linear(498, output_dim)
+        self.fc1 = nn.Linear(7968, output_dim)
         # self.sigmoid = nn.Sigmoid()
         # self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, x):
-        output = self.dropout0(x)
+        output = x
+        # output = self.dropout0(output)
         output = F.relu(self.cnn1(output))
-        output = torch.squeeze(output)
+        # output = torch.squeeze(output)
+        output = torch.flatten(output, 1)
         # output = self.dropout1(output)
         output = self.fc1(output)
         # output = self.sigmoid(output)
