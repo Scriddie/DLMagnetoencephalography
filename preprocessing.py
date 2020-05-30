@@ -24,6 +24,7 @@ import itertools
 from sklearn.preprocessing import StandardScaler, scale
 import matplotlib.pyplot as plt
 from scipy.signal import decimate
+import glob
 np.random.seed(0)
 torch.manual_seed(0)
 
@@ -107,9 +108,9 @@ def scale_obs(obs):
 
 # TODO create cross-validation set alongside
 # TODO add in some nice prints about how exactly we are pre-processing data
-def preprocess(datasets:list, label_list:list, window_size, downsampling, keep_fraction, scale_observations):
+def preprocess(datasets, window_size, downsampling, keep_fraction, scale_observations):
     """ 
-    @param datasets: list of datasets to perform windowing on
+    @param datasets: Generator of datasets to perform windowing on
     @param label_list: a list of labels for each dataset
     @param window_size: number of observations per window
     @param keep_fraction: fraction of windows to keep
@@ -118,10 +119,11 @@ def preprocess(datasets:list, label_list:list, window_size, downsampling, keep_f
 
     all_windows = []
     all_labels = []
-    for i, data in enumerate(datasets):
+    for subject, task, data in datasets:
+        print(f"Loading subject {subject} {task}")
         window = create_windows(data, window_size, keep_fraction=keep_fraction)
         all_windows.append(window)
-        labels, label_dict = create_labels(window, label_list[i])
+        labels, label_dict = create_labels(window, task)
         all_labels.append(labels)
     
     # flatten nested lists
