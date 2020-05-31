@@ -21,6 +21,34 @@ class simpleCNN(nn.Module):
         output = self.fc1(output)
         return(output)
 
+# Conv1dCNN
+class simpleCNNInitial(nn.Module):
+    def __init__(self, input_dim, output_dim, init, n_channels=16):
+        super().__init__()
+        self.model_name = "ShallowCNN"
+        self.cnn1 = nn.Conv1d(input_dim, n_channels, kernel_size=5, stride=2)
+        if init == "xavier_normal":
+            torch.nn.init.xavier_normal(self.cnn1.weight)
+        elif init == "random_uniform":
+            torch.nn.init.uniform_(self.cnn1.weight, a=-0.01, b=0.01)
+        elif init == "ones":
+            self.cnn1.weight.data.fill_(1.)
+        self.fc1 = nn.Linear(7968, output_dim)
+        if init == "xavier_normal":
+            torch.nn.init.xavier_normal(self.fc1.weight)
+        elif init == "random_uniform":
+            torch.nn.init.uniform_(self.fc1.weight, a=-0.01, b=0.01)
+        elif init == "ones":
+            self.fc1.weight.data.fill_(1.)
+        else:
+            raise NameError
+    def forward(self, x, dropout=None):
+        output = x
+        output = F.relu(self.cnn1(output))
+        output = torch.flatten(output, 1)
+        output = self.fc1(output)
+        return(output)
+
 # class simpleCNNDropout(nn.Module):
 #     def __init__(self, input_dim, output_dim):
 #         super().__init__()
@@ -38,6 +66,7 @@ class simpleCNN(nn.Module):
 #         output = self.dropout1(output)
 #         output = self.fc1(output)
 #         return(output)
+
 
 class deepCNN(nn.Module):
     def __init__(self, input_dim, output_dim, 
