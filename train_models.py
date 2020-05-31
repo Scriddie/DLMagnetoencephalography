@@ -14,10 +14,10 @@ from copy import deepcopy
 from train_functions import *
 from datetime import datetime
 import os
-import experimental_models
 from importlib import reload
 import shutil
 import matplotlib.ticker as ticker
+import argparse
 np.random.seed(0)
 torch.manual_seed(0)
 device = torch.device("cpu")
@@ -103,7 +103,6 @@ def train_model(model, train_loader, cv_loader, n_epochs, max_batches, model_par
 
 
 def lr_grid_search(model_df, test_loaders):
-    # TODO grid search learning rate
     learning_rates = np.linspace(1e-5, 1e-1, 8)
     model_path = f"models/grid_search/{type_name}_" + datetime.now().strftime("%Y-%m-%d_%H:%M")[0:16]
     os.mkdir(model_path)
@@ -122,8 +121,6 @@ def lr_grid_search(model_df, test_loaders):
         best_cv_loss = train_model(model, train_loader, cv_loader, n_epochs=200, max_batches=9999, model_params=model_params, 
             preprocessing_params=preprocessing_params, model_path=model_path, visualize=False)
         all_accuracies.append(best_cv_loss)
-        # TODO create a dataframe, log best cv_loss
-        # TODO get model train & cv acc
     df = pd.DataFrame({
         "Learning Rate": learning_rates,
         "labels": ["{:.2e}".format(i) for i in learning_rates],
@@ -177,11 +174,6 @@ def initializations():
     plt.savefig(model_path + "/init_schemes.png", dpi=500)
     plt.show()
 
-    # TODO xavier normal
-    # random uniform
-    pass
-
-
 
 def evaluate(model, model_path, test_loaders, visualize=False):
     all_accs = pd.DataFrame()
@@ -191,21 +183,27 @@ def evaluate(model, model_path, test_loaders, visualize=False):
         acc_df["subject"] = [f"test{i}"]
         all_accs = pd.concat((all_accs, acc_df), axis=0)
     all_accs.to_latex(open(f"{model_path}/accuracy_table.txt", "w"), index=False)
-    # TODO create a lil bar plot for all test dirs
-
-def train_intra():
-    pass
 
 
 if __name__ == "__main__":
 
-    ### Intra
-    # type_name = "Intra"
-    # load_intra_cv = False
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--type", default="",
+                        help="'Cross' for cross-subject \n 'Intra' for intra-subject")
+    parser.add_argument("--mode", default="",
+        help="'train' to train a single model,\n 'search' to start a gird search,\n 'init' to analyse initialization schemes\n")
+    parser.add_argument("--model", default="",
+        help="use in combination with 'train' mode. Select one of \n ['shallow', 'deep', 'deep_dropout', 'deep_batch_norm', 'CNN2D']\n")
+    
+    args = parser.parse_args()
+    type_name = args.type
+    mode = args.mode
+    model = args.model
 
-    ### Cross
-    type_name = "Cross"
-    mode = "init" # ["train", "search", "init"]
+    # # manual override
+    # type_name = "Cross"
+    # mode = "train" # ["train", "search", "init"]
+    # model = "deep_dropout"
     
     if type_name == "Intra":
         load_intra_cv = False
@@ -253,22 +251,21 @@ if __name__ == "__main__":
 
     ### train cnn
     if mode == "train":
-        # TODO iterate over all models once they're done
-        # cnn = models.CNN(input_dim=248, output_dim=4)
         reload(models)
-        # all_models = [
-        #     models.simpleCNN(input_dim=248, output_dim=4),
-        #     models.deepCNN(input_dim=248, output_dim=4),
-        #     models.deepCNNDropout(input_dim=248, output_dim=4),
-        #     models.deepCNNBatchNorm(248, 4),
-        #     models.CNN2D(248, 4),
-        #     models.CNNSideways(248, 4),
-        # ]
-        # for cnn in all_models:
-        reload(models)
-        # cnn = models.CNN2D(248, 4)
-        cnn = models.deepCNNDropout(input_dim=248, output_dim=4)
-        # cnn = models.simpleCNN(input_dim=248, output_dim=4)
+        if model == "shallow":
+            cnn = models.simpleCNN(input_dim=248, output_dim=4)
+        elif model == "deep":
+            cnn = models.deepCNN(input_dim=248, output_dim=4)
+        elif model == "deep_dropout":
+            cnn = models.deepCNNDropout(input_dim=248, output_dim=4)
+        elif model == "deep_batch_norm":
+            cnn = models.deepCNNBatchNorm(input_dim=248, output_dim=4)
+        elif model == "CNN2D":
+            cnn = models.CNN2D(input_dim=248, output_dim=4),
+        else:
+            print("Model not found. Did you misspell the model name?")
+            raise NameError
+
         cnn.to(device)
         
         lr = 1e-6
