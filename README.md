@@ -1,4 +1,7 @@
-# Training
+# Deep Learning on MEG data
+This repository contains the final assignment submission for the UM course KEN4257 on Deep Learning
+
+## Training
 
 For an example usage run:
 
@@ -9,7 +12,7 @@ For an example usage run:
 For an overview of possibilities run `python train_models.py -h`.
 (Note: Running the pipeline requires ~10gb of free RAM for cross-subject classification)
 
-# Setup
+## Setup
 
 Models and corresponding figures are saved in the Models/Directory.
 
